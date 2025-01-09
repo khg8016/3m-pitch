@@ -3,13 +3,13 @@ import { Home, Upload, Mail, User, LogOut, Timer, Briefcase } from 'lucide-react
 import { Link } from './Link';
 import { Link as RouterLink } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { UploadModal } from './UploadModal';
+import { UploadStudio } from './UploadStudio';
 import { AuthModal } from './AuthModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export function Sidebar() {
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploadStudioOpen, setIsUploadStudioOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { user } = useAuth();
 
@@ -53,7 +53,7 @@ export function Sidebar() {
           {user ? (
             <>
               <button
-                onClick={() => setIsUploadModalOpen(true)}
+                onClick={() => setIsUploadStudioOpen(true)}
                 className="w-full rounded-full bg-blue-500 py-3 text-white font-bold hover:bg-blue-600 transition flex items-center justify-center space-x-2"
               >
                 <Upload className="w-5 h-5" />
@@ -72,8 +72,8 @@ export function Sidebar() {
               onClick={() => setIsAuthModalOpen(true)}
               className="w-full rounded-full bg-blue-500 py-3 text-white font-bold hover:bg-blue-600 transition flex items-center justify-center space-x-2"
             >
-              <Upload className="w-5 h-5" />
-              <span>Upload</span>
+              <User className="w-5 h-5" />
+              <span>Login</span>
             </button>
           )}
         </div>
@@ -88,7 +88,7 @@ export function Sidebar() {
           </RouterLink>
           
           <button
-            onClick={() => setIsUploadModalOpen(true)}
+            onClick={() => setIsUploadStudioOpen(true)}
             className="flex flex-col items-center justify-center text-gray-600 dark:text-gray-300 hover:text-blue-500"
           >
             <Upload className="w-6 h-6" />
@@ -107,9 +107,9 @@ export function Sidebar() {
         </div>
       </div>
 
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+      <UploadStudio
+        isOpen={isUploadStudioOpen}
+        onClose={() => setIsUploadStudioOpen(false)}
       />
       
       <AuthModal
