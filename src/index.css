@@ -2,12 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+.snap-container {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+}
+
+.snap-slide {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.music-disc {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  to {
+    transform: rotate(360deg);
   }
+}
+
+.hashtag {
+  color: #00B2FF;
 }

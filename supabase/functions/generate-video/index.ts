@@ -9,8 +9,7 @@ declare const Deno: {
   };
 };
 
-const rawApiKey = Deno.env.get('D_ID_API_KEY') || '';
-const D_ID_API_KEY = btoa(rawApiKey);
+const D_ID_API_KEY = Deno.env.get('D_ID_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -91,7 +90,7 @@ serve(async (req) => {
       throw new Error('Script is required')
     }
 
-    console.log('Making D-ID API request with key:', D_ID_API_KEY);
+    console.log('Making D-ID API request');
     console.log('D-ID API URL:', D_ID_API_URL);
       
     // const requestBody = {
@@ -123,9 +122,9 @@ serve(async (req) => {
     // };
 
     const headers = {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      authorization: `Basic ${D_ID_API_KEY}`
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${D_ID_API_KEY}`
     }
     
     console.log('Request headers:', headers);
@@ -174,7 +173,7 @@ serve(async (req) => {
     while (true) {
       const resultResponse = await fetch(`${D_ID_API_URL}/talks/${parsedResponse.id}`, {
         headers: {
-          'accept': 'application/json',
+          'Accept': 'application/json',
           'Authorization': `Basic ${D_ID_API_KEY}`
         },
       });

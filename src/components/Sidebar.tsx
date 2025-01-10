@@ -1,121 +1,146 @@
-import React, { useState } from 'react';
-import { Home, Upload, Mail, User, LogOut, Timer, Briefcase } from 'lucide-react';
-import { Link } from './Link';
-import { Link as RouterLink } from 'react-router-dom';
-import { ThemeToggle } from './ThemeToggle';
-import { UploadStudio } from './UploadStudio';
-import { AuthModal } from './AuthModal';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  Home,
+  User,
+  Upload,
+  LogIn,
+  LogOut,
+  Sun,
+  Moon,
+} from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { AuthModal } from "./AuthModal";
+import { Logo } from "./Logo";
+import { supabase } from "../lib/supabase";
 
-export function Sidebar() {
-  const [isUploadStudioOpen, setIsUploadStudioOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+export function Sidebar(): JSX.Element {
   const { user } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleUploadClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    navigate("/upload");
   };
 
-  const menuItems = [
-    { icon: Home, text: 'Home', path: '/' },
-    { icon: Mail, text: 'Inbox', path: '/inbox' },
-    { icon: User, text: 'Profile', path: '/profile' },
-  ];
+  const handleAuthClose = () => {
+    setShowAuthModal(false);
+  };
 
-  const Logo = () => (
-    <div className="flex items-center space-x-2">
-      <div className="relative">
-        <Timer className="w-8 h-8 text-blue-500" />
-        <Briefcase className="w-4 h-4 text-blue-700 absolute -bottom-1 -right-1" />
-      </div>
-      <div className="flex flex-col">
-        <span className="font-bold text-lg text-gray-900 dark:text-white leading-tight">3 Min</span>
-        <span className="text-xs text-gray-600 dark:text-gray-400 leading-tight">Pitch</span>
-      </div>
-    </div>
-  );
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    // Force reload to clear all interaction states
+    window.location.reload();
+  };
+
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden md:block fixed h-screen w-64 border-r border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 transition-colors">
-        <div className="flex flex-col space-y-4">
-          <div className="flex items-center justify-between p-2">
-            <Logo />
-            <ThemeToggle />
-          </div>
-          
-          {menuItems.map((item) => (
-            <Link key={item.text} Icon={item.icon} text={item.text} path={item.path} />
-          ))}
-          
-          {user ? (
-            <>
-              <button
-                onClick={() => setIsUploadStudioOpen(true)}
-                className="w-full rounded-full bg-blue-500 py-3 text-white font-bold hover:bg-blue-600 transition flex items-center justify-center space-x-2"
-              >
-                <Upload className="w-5 h-5" />
-                <span>Upload</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                className="w-full rounded-full border-2 border-red-500 py-3 text-red-500 font-bold hover:bg-red-50 dark:hover:bg-red-950 transition flex items-center justify-center space-x-2 md:block hidden"
-              >
-                <LogOut className="w-5 h-5 inline-block" />
-                <span>Logout</span>
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="w-full rounded-full bg-blue-500 py-3 text-white font-bold hover:bg-blue-600 transition flex items-center justify-center space-x-2"
-            >
-              <User className="w-5 h-5" />
-              <span>Login</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50">
-        <div className="flex justify-around items-center h-16 px-4">
-          <RouterLink to="/" className="flex flex-col items-center justify-center text-gray-600 dark:text-gray-300 hover:text-blue-500">
-            <Home className="w-6 h-6" />
-            <span className="text-xs mt-1">Home</span>
-          </RouterLink>
-          
-          <button
-            onClick={() => setIsUploadStudioOpen(true)}
-            className="flex flex-col items-center justify-center text-gray-600 dark:text-gray-300 hover:text-blue-500"
+      <div className="fixed left-0 top-0 bottom-0 w-16 lg:w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 z-50">
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <Link
+            to="/"
+            className="flex items-center px-4 h-16 border-b border-gray-200 dark:border-gray-800"
           >
-            <Upload className="w-6 h-6" />
-            <span className="text-xs mt-1">Upload</span>
-          </button>
+            <Logo />
+          </Link>
 
-          <RouterLink to="/inbox" className="flex flex-col items-center justify-center text-gray-600 dark:text-gray-300 hover:text-blue-500">
-            <Mail className="w-6 h-6" />
-            <span className="text-xs mt-1">Inbox</span>
-          </RouterLink>
+          {/* Navigation */}
+          <nav className="flex-1 px-2 py-4">
+            <Link
+              to="/"
+              className={`flex items-center gap-4 px-2 py-3 rounded-lg ${
+                isActive("/")
+                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900"
+              }`}
+            >
+              <Home className="w-6 h-6" />
+              <span className="hidden lg:block">Home</span>
+            </Link>
 
-          <RouterLink to="/profile" className="flex flex-col items-center justify-center text-gray-600 dark:text-gray-300 hover:text-blue-500">
-            <User className="w-6 h-6" />
-            <span className="text-xs mt-1">Profile</span>
-          </RouterLink>
+            {user && (
+              <Link
+                to={`/profile/${user.id}`}
+                className={`flex items-center gap-4 px-2 py-3 rounded-lg ${
+                  isActive("/profile")
+                    ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900"
+                }`}
+              >
+                <User className="w-6 h-6" />
+                <span className="hidden lg:block">Profile</span>
+              </Link>
+            )}
+
+            <button
+              onClick={handleUploadClick}
+              className={`flex items-center gap-4 px-2 py-3 rounded-lg w-full ${
+                isActive("/upload")
+                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900"
+              }`}
+            >
+              <Upload className="w-6 h-6" />
+              <span className="hidden lg:block">Upload</span>
+            </button>
+          </nav>
+
+          {/* Footer */}
+          <div className="px-2 py-4 border-t border-gray-200 dark:border-gray-800">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-4 px-2 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg w-full"
+            >
+              {isDark ? (
+                <Sun className="w-6 h-6" />
+              ) : (
+                <Moon className="w-6 h-6" />
+              )}
+              <span className="hidden lg:block">
+                {isDark ? "Light Mode" : "Dark Mode"}
+              </span>
+            </button>
+
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-4 px-2 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg w-full"
+              >
+                <LogOut className="w-6 h-6" />
+                <span className="hidden lg:block">Sign Out</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="flex items-center gap-4 px-2 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg w-full"
+              >
+                <LogIn className="w-6 h-6" />
+                <span className="hidden lg:block">Sign In</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <UploadStudio
-        isOpen={isUploadStudioOpen}
-        onClose={() => setIsUploadStudioOpen(false)}
-      />
-      
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal onClose={handleAuthClose} />
+      )}
     </>
   );
 }

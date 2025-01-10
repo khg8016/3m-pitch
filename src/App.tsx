@@ -1,23 +1,28 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Sidebar } from './components/Sidebar';
-import { Feed } from './components/Feed';
-import { ProfilePage } from './components/ProfilePage';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Sidebar } from "./components/Sidebar";
+import { Feed } from "./components/Feed";
+import { ProfilePage } from "./components/ProfilePage";
+import { UploadPage } from "./components/UploadPage";
+import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-black transition-colors">
-        <div className="max-w-7xl mx-auto flex">
-          <Sidebar />
-          <main className="flex-1 md:ml-64">
+      <AuthProvider>
+        <ThemeProvider>
+          <div className="min-h-screen bg-white dark:bg-black">
+            <Sidebar />
             <Routes>
               <Route path="/" element={<Feed />} />
-              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/video/:videoId" element={<Feed />} />
+              <Route path="/profile/:userId" element={<ProfilePage />} />
+              <Route path="/upload" element={<UploadPage />} />
             </Routes>
-          </main>
-        </div>
-      </div>
+          </div>
+        </ThemeProvider>
+      </AuthProvider>
     </Router>
   );
 }

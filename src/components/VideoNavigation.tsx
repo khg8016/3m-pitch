@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import React from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface VideoNavigationProps {
   onPrevious: () => void;
@@ -8,27 +8,33 @@ interface VideoNavigationProps {
   showNext: boolean;
 }
 
-export function VideoNavigation({ onPrevious, onNext, showPrevious, showNext }: VideoNavigationProps) {
+export function VideoNavigation({
+  onPrevious,
+  onNext,
+  showPrevious,
+  showNext,
+}: VideoNavigationProps): JSX.Element {
   return (
-    <div className="fixed right-8 h-screen flex flex-col justify-center gap-4 z-10">
+    <>
+      {/* Previous Button */}
       {showPrevious && (
         <button
           onClick={onPrevious}
-          className="w-12 h-12 bg-black/20 hover:bg-black/30 rounded-full flex items-center justify-center transition-colors"
-          aria-label="Previous video"
+          className="fixed left-20 lg:left-72 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
-          <ChevronUp className="w-8 h-8 text-white" />
+          <ChevronLeft className="w-6 h-6 text-gray-600 dark:text-gray-300" />
         </button>
       )}
+
+      {/* Next Button */}
       {showNext && (
         <button
           onClick={onNext}
-          className="w-12 h-12 bg-black/20 hover:bg-black/30 rounded-full flex items-center justify-center transition-colors"
-          aria-label="Next video"
+          className="fixed right-6 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
-          <ChevronDown className="w-8 h-8 text-white" />
+          <ChevronRight className="w-6 h-6 text-gray-600 dark:text-gray-300" />
         </button>
       )}
-    </div>
+    </>
   );
 }
