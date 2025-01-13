@@ -205,6 +205,25 @@ export function Feed(): JSX.Element {
     }
   };
 
+  const handleScroll = useCallback((e: Event) => {
+    const container = e.target as HTMLElement;
+    const scrollTop = container.scrollTop;
+    const itemHeight = window.innerHeight;
+    const newIndex = Math.round(scrollTop / itemHeight);
+    
+    if (newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
+    }
+  }, [currentIndex]);
+
+  useEffect(() => {
+    const container = document.querySelector('.snap-container');
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
   return (
     <div className="relative ml-16 lg:ml-64 bg-gray-100 dark:bg-gray-900">
       <VideoNavigation
@@ -216,7 +235,7 @@ export function Feed(): JSX.Element {
       <div className="snap-container">
         {videos.map((video, index) => (
           <div key={video.id} id={`video-${index}`}>
-            <VideoPlayer video={video} />
+            <VideoPlayer video={video} isActive={index === currentIndex} />
           </div>
         ))}
       </div>

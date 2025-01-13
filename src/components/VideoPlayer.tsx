@@ -30,8 +30,10 @@ import {
 
 export function VideoPlayer({
   video: initialVideo,
+  isActive,
 }: {
   video: Video;
+  isActive: boolean;
 }): JSX.Element {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -68,9 +70,16 @@ export function VideoPlayer({
     setSaveCount(initialVideo.saved_count ?? 0);
   }, [initialVideo]);
 
+  // Handle video playback based on active state
   useEffect(() => {
     if (videoRef.current) {
       const video = videoRef.current;
+
+      if (!isActive) {
+        video.pause();
+        video.currentTime = 0;
+        setIsPlaying(false);
+      }
 
       const handleTimeUpdate = () => {
         const progress = (video.currentTime / video.duration) * 100;
@@ -82,15 +91,36 @@ export function VideoPlayer({
         setDuration(formatDuration(video.duration));
       };
 
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          video.pause();
+          setIsPlaying(false);
+        }
+      };
+
       video.addEventListener("timeupdate", handleTimeUpdate);
       video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
 
       return () => {
+        video.pause();
+        video.currentTime = 0;
         video.removeEventListener("timeupdate", handleTimeUpdate);
         video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
       };
     }
-  }, []);
+  }, [isActive]);
+
+  // Stop video when component unmounts or video changes
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+    };
+  }, [video.id]);
 
   useEffect(() => {
     // Subscribe to realtime updates

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Play,
   Volume2,
@@ -16,6 +16,31 @@ export function PreviewVideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Handle video cleanup when component unmounts or video changes
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          video.pause();
+          video.currentTime = 0;
+          setIsPlaying(false);
+        }
+      };
+
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      // Cleanup when unmounting or video changes
+      return () => {
+        video.pause();
+        video.currentTime = 0;
+        setIsPlaying(false);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
+  }, [initialVideo.id]);
 
   const togglePlayPause = (e: React.MouseEvent) => {
     e.stopPropagation();
