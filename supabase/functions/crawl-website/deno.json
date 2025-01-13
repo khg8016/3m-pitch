@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "serve": "deno run --allow-net --allow-env index.ts"
+  },
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.7.1",
+    "corsify": "https://deno.land/x/corsify@v1.0.0/mod.ts",
+    "puppeteer": "https://deno.land/x/puppeteer@16.2.0/mod.ts"
+  }
+}

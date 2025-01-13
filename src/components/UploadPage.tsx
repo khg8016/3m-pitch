@@ -1,12 +1,19 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Wand2, Video, Loader2, FileText, Link as LinkIcon, Building, ArrowDown } from "lucide-react";
+import {
+  Wand2,
+  Video,
+  Loader2,
+  FileText,
+  Link as LinkIcon,
+  Building,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { PhoneFrame } from "./PhoneFrame";
 import { PreviewFeed } from "./PreviewFeed";
 import { Video as VideoType } from "../types/video";
-import { extractTextFromPdf, analyzeCompanyInfo, CompanyInfo } from "../utils/pdf";
+import { extractTextFromPdf, analyzeCompanyInfo } from "../utils/pdf";
 
 export function UploadPage(): JSX.Element {
   const { user } = useAuth();
@@ -29,13 +36,13 @@ export function UploadPage(): JSX.Element {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setPdfFile(file);
-      
+
       // Analyze PDF
       setIsAnalyzingPdf(true);
       try {
         const text = await extractTextFromPdf(file);
         const info = await analyzeCompanyInfo(text);
-        
+
         if (info.website) setCompanyUrl(info.website);
         if (info.description) setCompanyDescription(info.description);
       } catch (error) {
@@ -49,20 +56,95 @@ export function UploadPage(): JSX.Element {
   const handleGenerateScript = async () => {
     setIsGeneratingScript(true);
     try {
-      // Upload PDF if exists
-      let pdfUrl = "";
-      if (pdfFile) {
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("proposals")
-          .upload(`${user?.id}/${Date.now()}-${pdfFile.name}`, pdfFile);
+      // First, crawl the website using the Edge Function
+      let websiteContent = "";
+      if (companyUrl) {
+        try {
+          const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+          const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          console.log(
+            "companyUrl 2",
+            `${SUPABASE_URL}/functions/v1/crawl-website`
+          );
+          const crawlResponse = await fetch(
+            `${SUPABASE_URL}/functions/v1/crawl-website`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({ url: companyUrl }),
+            }
+          );
 
-        if (uploadError) throw uploadError;
-        pdfUrl = uploadData.path;
+          if (crawlResponse.ok) {
+            const crawlData = await crawlResponse.json();
+            websiteContent = `
+MAIN PAGE
+URL: ${crawlData.mainPage.url}
+${"-".repeat(50)}
+${crawlData.mainPage.title ? `Title: ${crawlData.mainPage.title}\n` : ""}${
+              crawlData.mainPage.description
+                ? `Description: ${crawlData.mainPage.description}\n`
+                : ""
+            }
+Content:
+${crawlData.mainPage.content}
+
+${
+  crawlData.subPages.length > 0 ? `\nSUBPAGES\n${"-".repeat(50)}\n` : ""
+}${crawlData.subPages
+              .map(
+                (page: {
+                  url: string;
+                  title: string;
+                  description: string;
+                  content: string;
+                }) => `
+Page URL: ${page.url}
+${page.title ? `Title: ${page.title}\n` : ""}${
+                  page.description ? `Description: ${page.description}\n` : ""
+                }
+Content:
+${page.content}
+${"-".repeat(50)}`
+              )
+              .join("\n\n")}`.trim();
+          } else {
+            console.error("Failed to crawl website");
+          }
+        } catch (error) {
+          console.error("Error crawling website:", error);
+        }
       }
 
-      // TODO: Call OpenAI API to generate script
-      // For now, just combine the inputs
-      const script = `Company Website: ${companyUrl}\n\n${companyDescription}`;
+      // Create form data for the webhook request
+      const formData = new FormData();
+      formData.append("websiteContent", websiteContent);
+      formData.append("companyDescription", companyDescription);
+
+      if (pdfFile) {
+        formData.append("pdfFile", pdfFile);
+      }
+
+      const CRAWL_N8N_URL = import.meta.env.VITE_CRAWL_N8N_URL;
+      // Send POST request to the webhook
+      const response = await fetch(CRAWL_N8N_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate script");
+      }
+
+      const data = await response.json();
+
+      // Set the generated script from the response
+      const script =
+        data.script ||
+        `Website Content:\n${websiteContent}\n\nCompany Description:\n${companyDescription}`;
       setGeneratedScript(script);
     } catch (error) {
       console.error("Error generating script:", error);
@@ -75,7 +157,7 @@ export function UploadPage(): JSX.Element {
     if (!generatedScript.trim()) return;
 
     setIsLoading(true);
-    
+
     try {
       // Call Heygen API to generate video
       const { data: videoData, error: videoError } = await supabase
@@ -101,14 +183,18 @@ export function UploadPage(): JSX.Element {
         if (status?.status === "completed" && status?.video_url) {
           clearInterval(interval);
           setProgress(100);
-          
+
           // Create video entry
-          const { data: video } = await supabase.from("videos").insert({
-            user_id: user?.id,
-            title: generatedScript.slice(0, 50) + "...",
-            description: generatedScript,
-            video_url: status.video_url,
-          }).select("*, profiles(*)").single();
+          const { data: video } = await supabase
+            .from("videos")
+            .insert({
+              user_id: user?.id,
+              title: generatedScript.slice(0, 50) + "...",
+              description: generatedScript,
+              video_url: status.video_url,
+            })
+            .select("*, profiles(*)")
+            .single();
 
           if (video) {
             setPreviewVideo({
@@ -140,13 +226,15 @@ export function UploadPage(): JSX.Element {
       <div className="flex gap-12">
         {/* Left Column - Form */}
         <div className="flex-1 max-w-2xl">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">AI Studio</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+            AI Studio
+          </h1>
 
           {/* Progress bar */}
           {isLoading && (
             <div className="mb-8">
               <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${progress}%` }}
                 />
@@ -175,9 +263,9 @@ export function UploadPage(): JSX.Element {
                         {pdfFile ? pdfFile.name : "Upload Business Proposal"}
                       </p>
                     </div>
-                    <input 
-                      type="file" 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      className="hidden"
                       accept=".pdf"
                       onChange={handleFileChange}
                       disabled={isLoading || isGeneratingScript}
