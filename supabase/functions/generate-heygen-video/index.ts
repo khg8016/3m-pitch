@@ -159,8 +159,8 @@ serve(async (req) => {
         title: 'Generated Avatar Video',
         caption: true,
         dimension: {
-          "width": 720,
-          "height": 1280
+          "width": 1280,
+          "height": 720
         },
         callback_url: `${SUPABASE_URL}/functions/v1/heygen-webhook`,
         video_inputs: [
