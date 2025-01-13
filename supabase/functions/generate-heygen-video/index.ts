@@ -125,10 +125,13 @@ serve(async (req) => {
 
     // POST request for generating video
     if (req.method === 'POST') {
-      const { script } = await req.json()
+      const { script, language } = await req.json()
       
       if (!script) {
         throw new Error('Script is required')
+      }
+      if (!language) {
+        throw new Error('Language is required')
       }
 
       console.log('Making Heygen API request');
@@ -174,7 +177,7 @@ serve(async (req) => {
             },
             voice: {
               type: 'text',
-              voice_id: '9d81087c3f9a45df8c22ab91cf46ca89',
+              voice_id: language == 'Korean' ? '9d81087c3f9a45df8c22ab91cf46ca89' : '1985984feded457b9d013b4f6551ac94',
               input_text: script,
               speed: 1.0,
               pitch: 0,

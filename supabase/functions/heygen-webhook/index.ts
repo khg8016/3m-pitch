@@ -48,12 +48,14 @@ serve(async (req) => {
 
     const webhookData: WebhookData = await req.json()
     console.log('Received webhook data:', webhookData)
-
+    if (webhookData.event_type !== 'avatar_video.success' && webhookData.event_type !== 'avatar_video.fail') {
+      return
+    }
     // Update heygen video record in database
     const { error } = await supabaseAdmin
       .from('heygen_videos')
       .update({
-        status: webhookData.event_type === 'avatar_video.success' ? 'completed' : 'failed',
+        status: (webhookData.event_type === 'avatar_video.success') ? 'completed' : 'failed',
         video_url: webhookData.event_data.url,
         updated_at: new Date().toISOString()
       })

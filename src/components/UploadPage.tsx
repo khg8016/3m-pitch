@@ -7,6 +7,7 @@ import {
   FileText,
   Link as LinkIcon,
   Building,
+  Upload,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -20,6 +21,7 @@ export function UploadPage(): JSX.Element {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState("");
 
   // Form inputs
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -28,28 +30,26 @@ export function UploadPage(): JSX.Element {
   const [generatedScript, setGeneratedScript] = useState("");
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isAnalyzingPdf, setIsAnalyzingPdf] = useState(false);
+  const [scriptLanguage, setScriptLanguage] = useState<"ko" | "en">("ko");
+
+  // Video upload states
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string>("");
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoDescription, setVideoDescription] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<VideoType | null>(null);
 
   const hasRequiredInput = pdfFile || companyUrl || companyDescription;
+  const canUpload =
+    generatedVideoUrl &&
+    videoTitle.trim() &&
+    videoDescription.trim() &&
+    !isUploading;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setPdfFile(file);
-
-      // Analyze PDF
-      setIsAnalyzingPdf(true);
-      try {
-        const text = await extractTextFromPdf(file);
-        const info = await analyzeCompanyInfo(text);
-
-        if (info.website) setCompanyUrl(info.website);
-        if (info.description) setCompanyDescription(info.description);
-      } catch (error) {
-        console.error("Error analyzing PDF:", error);
-      } finally {
-        setIsAnalyzingPdf(false);
-      }
     }
   };
 
@@ -62,10 +62,7 @@ export function UploadPage(): JSX.Element {
         try {
           const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
           const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          console.log(
-            "companyUrl 2",
-            `${SUPABASE_URL}/functions/v1/crawl-website`
-          );
+
           const crawlResponse = await fetch(
             `${SUPABASE_URL}/functions/v1/crawl-website`,
             {
@@ -123,14 +120,15 @@ ${"-".repeat(50)}`
       const formData = new FormData();
       formData.append("websiteContent", websiteContent);
       formData.append("companyDescription", companyDescription);
+      formData.append("language", scriptLanguage);
 
       if (pdfFile) {
         formData.append("pdfFile", pdfFile);
       }
 
-      const CRAWL_N8N_URL = import.meta.env.VITE_CRAWL_N8N_URL;
+      const GEN_SCRIPT_N8N_URL = import.meta.env.VITE_GEN_SCRIPT_N8N_URL;
       // Send POST request to the webhook
-      const response = await fetch(CRAWL_N8N_URL, {
+      const response = await fetch(GEN_SCRIPT_N8N_URL, {
         method: "POST",
         body: formData,
       });
@@ -157,67 +155,154 @@ ${"-".repeat(50)}`
     if (!generatedScript.trim()) return;
 
     setIsLoading(true);
+    setProgress(10);
+    setStatusMessage("Initializing video generation...");
 
     try {
-      // Call Heygen API to generate video
-      const { data: videoData, error: videoError } = await supabase
-        .from("heygen_videos")
-        .insert({
-          user_id: user?.id,
-          script: generatedScript,
-          status: "pending",
-        })
-        .select()
-        .single();
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
-      if (videoError) throw videoError;
+      // Get the user's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("No authentication token found");
+      }
+
+      setProgress(20);
+      setStatusMessage("Preparing script for video generation...");
+
+      // Call generate-heygen-video edge function
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/generate-heygen-video`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            script: generatedScript,
+            language: scriptLanguage,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate video");
+      }
+
+      setProgress(30);
+      setStatusMessage("Video generation started...");
+
+      const { video_id, polling_url, polling_interval } = await response.json();
+      let currentProgress = 30;
+      let pollCount = 0;
 
       // Start polling for video status
       const interval = setInterval(async () => {
-        const { data: status } = await supabase
-          .from("heygen_videos")
-          .select("status, video_url")
-          .eq("id", videoData.id)
-          .single();
+        const statusResponse = await fetch(polling_url, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
 
-        if (status?.status === "completed" && status?.video_url) {
+        if (!statusResponse.ok) {
+          clearInterval(interval);
+          setIsLoading(false);
+          throw new Error("Failed to check video status");
+        }
+
+        const { data: status } = await statusResponse.json();
+        pollCount++;
+
+        if (status.status === "completed" && status.video_url) {
           clearInterval(interval);
           setProgress(100);
+          setStatusMessage("Video generation complete!");
+          setGeneratedVideoUrl(status.video_url);
+          setIsLoading(false);
 
-          // Create video entry
-          const { data: video } = await supabase
-            .from("videos")
-            .insert({
-              user_id: user?.id,
-              title: generatedScript.slice(0, 50) + "...",
-              description: generatedScript,
-              video_url: status.video_url,
-            })
-            .select("*, profiles(*)")
+          // Get user's profile data
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", user?.id)
             .single();
 
-          if (video) {
-            setPreviewVideo({
-              ...video,
-              profiles: video.profiles,
-              is_liked: false,
-              is_following: false,
-              is_saved: false,
-            });
-          }
-
-          navigate("/");
-        } else if (status?.status === "failed") {
+          // Set preview video when generation is complete and we have a URL
+          setPreviewVideo({
+            title: "",
+            description: "",
+            video_url: status.video_url,
+            is_liked: false,
+            is_following: false,
+            is_saved: false,
+            id: "",
+            views: 0,
+            comment_count: 0,
+            likes: 0,
+            saved_count: 0,
+            user_id: user?.id || "",
+            created_at: new Date().toISOString(),
+            profiles: {
+              username: profile?.username || "anonymous",
+              follower_count: 0,
+              following_count: 0,
+            },
+          });
+        } else if (status.status === "failed") {
           clearInterval(interval);
+          setIsLoading(false);
           throw new Error("Video generation failed");
         } else {
-          setProgress((prev) => Math.min(prev + 10, 90));
+          // Update progress based on poll count, but ensure it stays between 30-85%
+          const progressIncrement = (85 - 30) / 20; // Divide remaining progress by expected number of polls
+          currentProgress = Math.min(85, 30 + pollCount * progressIncrement);
+          setProgress(currentProgress);
+
+          // Update status message based on progress
+          if (currentProgress < 50) {
+            setStatusMessage("Processing script and preparing avatar...");
+          } else if (currentProgress < 70) {
+            setStatusMessage("Generating video animation...");
+          } else {
+            setStatusMessage("Adding final touches...");
+          }
         }
-      }, 5000);
+      }, polling_interval);
     } catch (error) {
       console.error("Error generating video:", error);
-    } finally {
+      setStatusMessage(
+        "Error: " +
+          (error instanceof Error ? error.message : "Failed to generate video")
+      );
       setIsLoading(false);
+    }
+  };
+
+  const handleUploadVideo = async () => {
+    if (!canUpload) return;
+
+    setIsUploading(true);
+    try {
+      // Create video entry
+      const { data: video } = await supabase
+        .from("videos")
+        .insert({
+          user_id: user?.id,
+          title: videoTitle,
+          description: videoDescription,
+          video_url: generatedVideoUrl,
+        })
+        .select("*, profiles(*)")
+        .single();
+
+      alert("upload success!");
+    } catch (error) {
+      console.error("Error uploading video:", error);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -240,7 +325,7 @@ ${"-".repeat(50)}`
                 />
               </div>
               <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">
-                Generating video...
+                {statusMessage || "Generating video..."}
               </div>
             </div>
           )}
@@ -305,6 +390,24 @@ ${"-".repeat(50)}`
               </div>
             </div>
 
+            {/* Language Selection */}
+            <div className="flex justify-center items-center gap-2">
+              <select
+                value={scriptLanguage}
+                onChange={(e) =>
+                  setScriptLanguage(e.target.value as "ko" | "en")
+                }
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoading || isGeneratingScript}
+              >
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+              </select>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                스크립트 언어
+              </span>
+            </div>
+
             {/* Generate Script Button */}
             <div className="flex justify-center">
               <button
@@ -358,6 +461,45 @@ ${"-".repeat(50)}`
                 )}
               </button>
             </div>
+
+            {/* Video Upload Section */}
+            {generatedVideoUrl && (
+              <div className="space-y-4 p-6 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                <input
+                  type="text"
+                  value={videoTitle}
+                  onChange={(e) => setVideoTitle(e.target.value)}
+                  placeholder="Enter video title"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <textarea
+                  rows={4}
+                  value={videoDescription}
+                  onChange={(e) => setVideoDescription(e.target.value)}
+                  placeholder="Enter video description"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleUploadVideo}
+                    disabled={!canUpload}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        Upload Video
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

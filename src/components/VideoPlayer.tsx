@@ -21,9 +21,18 @@ import { Comments } from "./Comments";
 import { Video } from "../types/video";
 import { formatNumber, formatHashtags, formatDuration } from "../utils/format";
 import { getVideoUrl, updateVideoStats } from "../utils/video";
-import { toggleLike, toggleFollow, toggleSave, shareVideo } from "../utils/interactions";
+import {
+  toggleLike,
+  toggleFollow,
+  toggleSave,
+  shareVideo,
+} from "../utils/interactions";
 
-export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Element {
+export function VideoPlayer({
+  video: initialVideo,
+}: {
+  video: Video;
+}): JSX.Element {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -32,10 +41,16 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
   const [video, setVideo] = useState(initialVideo);
   const [isLiked, setIsLiked] = useState(initialVideo.is_liked ?? false);
   const [likeCount, setLikeCount] = useState(initialVideo.likes ?? 0);
-  const [isFollowing, setIsFollowing] = useState(initialVideo.is_following ?? false);
-  const [followerCount, setFollowerCount] = useState(initialVideo.profiles.follower_count ?? 0);
+  const [isFollowing, setIsFollowing] = useState(
+    initialVideo.is_following ?? false
+  );
+  const [followerCount, setFollowerCount] = useState(
+    initialVideo.profiles.follower_count ?? 0
+  );
   const [isSaved, setIsSaved] = useState(initialVideo.is_saved ?? false);
-  const [saveCount, setSaveCount] = useState<number>(initialVideo.saved_count ?? 0);
+  const [saveCount, setSaveCount] = useState<number>(
+    initialVideo.saved_count ?? 0
+  );
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState("0:00");
   const [duration, setDuration] = useState("0:00");
@@ -56,7 +71,7 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
   useEffect(() => {
     if (videoRef.current) {
       const video = videoRef.current;
-      
+
       const handleTimeUpdate = () => {
         const progress = (video.currentTime / video.duration) * 100;
         setProgress(progress);
@@ -67,12 +82,12 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
         setDuration(formatDuration(video.duration));
       };
 
-      video.addEventListener('timeupdate', handleTimeUpdate);
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener("timeupdate", handleTimeUpdate);
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
 
       return () => {
-        video.removeEventListener('timeupdate', handleTimeUpdate);
-        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener("timeupdate", handleTimeUpdate);
+        video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       };
     }
   }, []);
@@ -206,7 +221,7 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
     }
   };
 
-  const videoUrl = getVideoUrl(video.video_url);
+  const videoUrl = video.video_url;
 
   return (
     <div className="snap-slide relative bg-black min-h-screen flex items-center justify-center">
@@ -258,12 +273,16 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
             {/* Info section */}
             <div className="mb-8">
               <div className="flex items-center mb-2">
-                <span className="text-white font-bold">@{video.profiles.username}</span>
+                <span className="text-white font-bold">
+                  @{video.profiles.username}
+                </span>
                 <span className="ml-2 text-sm text-white/80">
                   {new Date(video.created_at).toLocaleDateString()}
                 </span>
               </div>
-              <p className="text-white text-sm mb-2">{formatHashtags(video.description)}</p>
+              <p className="text-white text-sm mb-2">
+                {formatHashtags(video.description)}
+              </p>
               <div className="flex items-center">
                 <Music2 className="w-4 h-4 text-white mr-2" />
                 <div className="flex items-center">
@@ -274,26 +293,29 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <span className="text-white text-sm">Original Sound - {video.profiles.username}</span>
+                  <span className="text-white text-sm">
+                    Original Sound - {video.profiles.username}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Video progress bar */}
             <div>
-              <div 
+              <div
                 className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden cursor-pointer"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = e.clientX - rect.left;
                   const percentage = (x / rect.width) * 100;
                   if (videoRef.current) {
-                    const newTime = (percentage / 100) * videoRef.current.duration;
+                    const newTime =
+                      (percentage / 100) * videoRef.current.duration;
                     videoRef.current.currentTime = newTime;
                   }
                 }}
               >
-                <div 
+                <div
                   className="absolute left-0 top-0 bottom-0 bg-white rounded-full transition-all duration-200"
                   style={{ width: `${progress}%` }}
                 />
@@ -310,7 +332,9 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
         {showComments && (
           <div className="w-[400px] h-[890px] bg-white dark:bg-black/95 rounded-[3rem] overflow-hidden shadow-2xl border-[8px] border-gray-100 dark:border-black">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Comments</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Comments
+              </h2>
               <button
                 onClick={() => setShowComments(false)}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -413,7 +437,7 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
 
           {/* Share */}
           <div className="flex flex-col items-center relative">
-            <button 
+            <button
               className="w-14 h-14 flex items-center justify-center"
               onClick={(e) => {
                 e.stopPropagation();
@@ -428,12 +452,14 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
 
             {/* Share Menu */}
             {showShareMenu && (
-              <div 
+              <div
                 className="absolute right-16 top-0 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 w-64 z-50"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 className="text-gray-900 dark:text-white font-semibold mb-3">Share to</h3>
-                
+                <h3 className="text-gray-900 dark:text-white font-semibold mb-3">
+                  Share to
+                </h3>
+
                 {/* Copy Link */}
                 <button
                   className="flex items-center gap-3 w-full p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -462,7 +488,9 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
                     onClick={() => handleShare("facebook")}
                   >
                     <Facebook className="w-5 h-5 text-blue-600" />
-                    <span className="text-gray-700 dark:text-gray-200">Share on Facebook</span>
+                    <span className="text-gray-700 dark:text-gray-200">
+                      Share on Facebook
+                    </span>
                   </button>
 
                   <button
@@ -470,7 +498,9 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
                     onClick={() => handleShare("twitter")}
                   >
                     <Twitter className="w-5 h-5 text-blue-400" />
-                    <span className="text-gray-700 dark:text-gray-200">Share on Twitter</span>
+                    <span className="text-gray-700 dark:text-gray-200">
+                      Share on Twitter
+                    </span>
                   </button>
 
                   <button
@@ -478,7 +508,9 @@ export function VideoPlayer({ video: initialVideo }: { video: Video }): JSX.Elem
                     onClick={() => handleShare("instagram")}
                   >
                     <Instagram className="w-5 h-5 text-pink-600" />
-                    <span className="text-gray-700 dark:text-gray-200">Share on Instagram</span>
+                    <span className="text-gray-700 dark:text-gray-200">
+                      Share on Instagram
+                    </span>
                   </button>
                 </div>
 
