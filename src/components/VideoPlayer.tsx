@@ -20,13 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import { Comments } from "./Comments";
 import { Video } from "../types/video";
 import { formatNumber, formatHashtags, formatDuration } from "../utils/format";
-import { getVideoUrl, updateVideoStats } from "../utils/video";
-import {
-  toggleLike,
-  toggleFollow,
-  toggleSave,
-  shareVideo,
-} from "../utils/interactions";
+import { toggleLike, toggleFollow, toggleSave, shareVideo } from "../utils/interactions";
 
 export function VideoPlayer({
   video: initialVideo,
@@ -37,37 +31,61 @@ export function VideoPlayer({
 }): JSX.Element {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
+  type VideoAction = 
+    | { type: 'SET_VIDEO'; payload: Video }
+    | { type: 'TOGGLE_LIKE' }
+    | { type: 'TOGGLE_SAVE' }
+    | { type: 'TOGGLE_FOLLOW' }
+    | { type: 'UPDATE_COMMENT_COUNT'; payload: number };
+
+  const videoReducer = (state: Video, action: VideoAction): Video => {
+    switch (action.type) {
+      case 'SET_VIDEO':
+        return action.payload;
+      case 'TOGGLE_LIKE':
+        return {
+          ...state,
+          is_liked: !state.is_liked,
+          likes: Math.max(0, state.likes + (state.is_liked ? -1 : 1))
+        };
+      case 'TOGGLE_SAVE':
+        return {
+          ...state,
+          is_saved: !state.is_saved,
+          saved_count: Math.max(0, state.saved_count + (state.is_saved ? -1 : 1))
+        };
+      case 'TOGGLE_FOLLOW':
+        return {
+          ...state,
+          is_following: !state.is_following,
+          profiles: {
+            ...state.profiles,
+            follower_count: Math.max(0, state.profiles.follower_count + (state.is_following ? -1 : 1))
+          }
+        };
+      case 'UPDATE_COMMENT_COUNT':
+        return {
+          ...state,
+          comment_count: action.payload
+        };
+      default:
+        return state;
+    }
+  };
+
+  const [video, dispatch] = React.useReducer(videoReducer, initialVideo);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [video, setVideo] = useState(initialVideo);
-  const [isLiked, setIsLiked] = useState(initialVideo.is_liked ?? false);
-  const [likeCount, setLikeCount] = useState(initialVideo.likes ?? 0);
-  const [isFollowing, setIsFollowing] = useState(
-    initialVideo.is_following ?? false
-  );
-  const [followerCount, setFollowerCount] = useState(
-    initialVideo.profiles.follower_count ?? 0
-  );
-  const [isSaved, setIsSaved] = useState(initialVideo.is_saved ?? false);
-  const [saveCount, setSaveCount] = useState<number>(
-    initialVideo.saved_count ?? 0
-  );
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState("0:00");
   const [duration, setDuration] = useState("0:00");
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Update state when initialVideo changes
+  // Update video state when initialVideo changes
   useEffect(() => {
-    setVideo(initialVideo);
-    setIsLiked(initialVideo.is_liked ?? false);
-    setLikeCount(initialVideo.likes ?? 0);
-    setIsFollowing(initialVideo.is_following ?? false);
-    setFollowerCount(initialVideo.profiles.follower_count ?? 0);
-    setIsSaved(initialVideo.is_saved ?? false);
-    setSaveCount(initialVideo.saved_count ?? 0);
+    dispatch({ type: 'SET_VIDEO', payload: initialVideo });
   }, [initialVideo]);
 
   // Handle video playback based on active state
@@ -112,48 +130,33 @@ export function VideoPlayer({
     }
   }, [isActive]);
 
-  // Stop video when component unmounts or video changes
+  // Subscribe to comment count updates only
   useEffect(() => {
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      }
-    };
-  }, [video.id]);
-
-  useEffect(() => {
-    // Subscribe to realtime updates for aggregated stats only
     const channel = supabase
-      .channel("video_stats")
+      .channel('video_comments')
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "videos",
-          filter: `id=eq.${video.id}`,
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `video_id=eq.${video.id}`,
         },
-        (payload: any) => {
-          // Update only the stats that changed
-          if (payload.new) {
-            setLikeCount(payload.new.likes ?? likeCount);
-            setSaveCount(payload.new.saved_count ?? saveCount);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${video.user_id}`,
-        },
-        (payload: any) => {
-          if (payload.new) {
-            setFollowerCount(payload.new.follower_count ?? followerCount);
-          }
+        () => {
+          // Get updated comment count
+          supabase
+            .from('videos')
+            .select('comment_count')
+            .eq('id', video.id)
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                dispatch({ 
+                  type: 'UPDATE_COMMENT_COUNT', 
+                  payload: data.comment_count 
+                });
+              }
+            });
         }
       )
       .subscribe();
@@ -161,16 +164,19 @@ export function VideoPlayer({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [video.id, video.user_id, likeCount, saveCount, followerCount]);
+  }, [video.id]);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
 
+    // Optimistic update
+    dispatch({ type: 'TOGGLE_LIKE' });
+
     const result = await toggleLike(video.id, user.id);
-    if (result.success) {
-      setIsLiked(!isLiked);
-      setLikeCount((prev) => prev + (isLiked ? -1 : 1));
+    if (!result.success) {
+      // Rollback on failure
+      dispatch({ type: 'TOGGLE_LIKE' });
     }
   };
 
@@ -178,10 +184,33 @@ export function VideoPlayer({
     e.stopPropagation();
     if (!user) return;
 
+    console.log('VideoPlayer - Follow button clicked:', {
+      video_id: video.id,
+      user_id: video.user_id,
+      current_state: {
+        is_following: video.is_following,
+        follower_count: video.profiles.follower_count
+      }
+    });
+
+    // Optimistic update
+    dispatch({ type: 'TOGGLE_FOLLOW' });
+
+    console.log('VideoPlayer - After optimistic update:', {
+      video_id: video.id,
+      user_id: video.user_id,
+      updated_state: {
+        is_following: !video.is_following,
+        follower_count: video.profiles.follower_count + (video.is_following ? -1 : 1)
+      }
+    });
+
     const result = await toggleFollow(video.user_id, user.id);
-    if (result.success) {
-      setIsFollowing(!isFollowing);
-      setFollowerCount((prev) => prev + (isFollowing ? -1 : 1));
+    console.log('VideoPlayer - Toggle follow result:', result);
+
+    if (!result.success) {
+      console.log('VideoPlayer - Rolling back optimistic update');
+      dispatch({ type: 'TOGGLE_FOLLOW' });
     }
   };
 
@@ -189,10 +218,13 @@ export function VideoPlayer({
     e.stopPropagation();
     if (!user) return;
 
+    // Optimistic update
+    dispatch({ type: 'TOGGLE_SAVE' });
+
     const result = await toggleSave(video.id, user.id);
-    if (result.success) {
-      setIsSaved(!isSaved);
-      setSaveCount((prev) => prev + (isSaved ? -1 : 1));
+    if (!result.success) {
+      // Rollback on failure
+      dispatch({ type: 'TOGGLE_SAVE' });
     }
   };
 
@@ -221,8 +253,6 @@ export function VideoPlayer({
     }
   };
 
-  const videoUrl = video.video_url;
-
   return (
     <div className="snap-slide relative bg-black min-h-screen flex items-center justify-center">
       <div className="flex gap-8">
@@ -236,7 +266,7 @@ export function VideoPlayer({
           {/* Video */}
           <video
             ref={videoRef}
-            src={videoUrl}
+            src={video.video_url}
             className="w-full h-full object-cover"
             playsInline
             loop
@@ -359,16 +389,18 @@ export function VideoPlayer({
                 className="w-full h-full object-cover"
               />
             </div>
-            <button
-              className={`follow-button mt-2 px-3 py-1.5 rounded-full text-sm ${
-                isFollowing
-                  ? "border border-white/50 text-white"
-                  : "bg-red-500 text-white"
-              }`}
-              onClick={handleFollow}
-            >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
+            {user?.id !== video.user_id && (
+              <button
+                className={`follow-button mt-2 px-3 py-1.5 rounded-full text-sm ${
+                  video.is_following
+                    ? "border border-white/50 text-white"
+                    : "bg-red-500 text-white"
+                }`}
+                onClick={handleFollow}
+              >
+                {video.is_following ? "Following" : "Follow"}
+              </button>
+            )}
           </div>
 
           {/* Like */}
@@ -379,18 +411,18 @@ export function VideoPlayer({
             >
               <div
                 className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                  isLiked ? "bg-red-500/20" : "bg-black/20"
+                  video.is_liked ? "bg-red-500/20" : "bg-black/20"
                 }`}
               >
                 <Heart
                   className={`w-8 h-8 ${
-                    isLiked ? "fill-red-500 text-red-500" : "text-white"
+                    video.is_liked ? "fill-red-500 text-red-500" : "text-white"
                   }`}
                 />
               </div>
             </button>
             <span className="text-white text-sm mt-1">
-              {formatNumber(likeCount)}
+              {formatNumber(video.likes)}
             </span>
           </div>
 
@@ -420,18 +452,18 @@ export function VideoPlayer({
             >
               <div
                 className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                  isSaved ? "bg-blue-500/20" : "bg-black/20"
+                  video.is_saved ? "bg-blue-500/20" : "bg-black/20"
                 }`}
               >
                 <Bookmark
                   className={`w-8 h-8 ${
-                    isSaved ? "fill-blue-500 text-blue-500" : "text-white"
+                    video.is_saved ? "fill-blue-500 text-blue-500" : "text-white"
                   }`}
                 />
               </div>
             </button>
             <span className="text-white text-sm mt-1">
-              {formatNumber(saveCount)}
+              {formatNumber(video.saved_count)}
             </span>
           </div>
 

@@ -21,19 +21,22 @@ export interface Video {
   is_saved?: boolean;
 }
 
+export interface Follow {
+  id: string;
+  follower_id: string;
+  following_id: string;
+}
+
 export interface DatabaseVideo extends Omit<Video, "profiles"> {
   profiles: {
     username: string;
     follower_count: number;
     following_count: number;
+    followers?: Follow[];
   };
 }
 
 export interface Like {
-  id: string;
-}
-
-export interface Follow {
   id: string;
 }
 

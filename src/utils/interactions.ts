@@ -5,12 +5,31 @@ export async function toggleLike(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.rpc('toggle_like', {
-      video_id: videoId,
-      user_id: userId
-    });
+    // Check if like exists
+    const { data: likes } = await supabase
+      .from('likes')
+      .select('id')
+      .eq('video_id', videoId)
+      .eq('user_id', userId);
 
-    if (error) throw error;
+    const likeExists = likes && likes.length > 0;
+
+    if (likeExists) {
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('video_id', videoId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('likes')
+        .insert([{ video_id: videoId, user_id: userId }]);
+
+      if (error) throw error;
+    }
+
     return { success: true };
   } catch (error) {
     console.error("Error toggling like:", error);
@@ -22,16 +41,61 @@ export async function toggleFollow(
   followingId: string,
   followerId: string
 ): Promise<{ success: boolean; error?: string }> {
+  console.log('toggleFollow - Starting:', { followingId, followerId });
+  
   try {
-    const { error } = await supabase.rpc('toggle_follow', {
-      following_id: followingId,
-      follower_id: followerId
-    });
+    // Prevent self-following
+    if (followingId === followerId) {
+      console.log('toggleFollow - Self follow prevented');
+      return { success: false, error: "Cannot follow yourself" };
+    }
 
-    if (error) throw error;
+    // Check if follow exists
+    console.log('toggleFollow - Checking if follow exists');
+    const { data: follows, error: checkError } = await supabase
+      .from('follows')
+      .select('id')
+      .eq('following_id', followingId)
+      .eq('follower_id', followerId);
+
+    if (checkError) {
+      console.error('toggleFollow - Error checking follow:', checkError);
+      throw checkError;
+    }
+
+    const followExists = follows && follows.length > 0;
+    console.log('toggleFollow - Follow exists:', followExists);
+
+    if (followExists) {
+      console.log('toggleFollow - Deleting follow');
+      const { error: deleteError } = await supabase
+        .from('follows')
+        .delete()
+        .eq('following_id', followingId)
+        .eq('follower_id', followerId);
+
+      if (deleteError) {
+        console.error('toggleFollow - Delete error:', deleteError);
+        throw deleteError;
+      }
+      console.log('toggleFollow - Delete successful');
+    } else {
+      console.log('toggleFollow - Inserting follow');
+      const { error: insertError } = await supabase
+        .from('follows')
+        .insert([{ following_id: followingId, follower_id: followerId }]);
+
+      if (insertError) {
+        console.error('toggleFollow - Insert error:', insertError);
+        throw insertError;
+      }
+      console.log('toggleFollow - Insert successful');
+    }
+
+    console.log('toggleFollow - Operation completed successfully');
     return { success: true };
   } catch (error) {
-    console.error("Error toggling follow:", error);
+    console.error('toggleFollow - Operation failed:', error);
     return { success: false, error: "Failed to toggle follow" };
   }
 }
@@ -41,12 +105,31 @@ export async function toggleSave(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.rpc('toggle_save', {
-      video_id: videoId,
-      user_id: userId
-    });
+    // Check if save exists
+    const { data: saves } = await supabase
+      .from('saves')
+      .select('id')
+      .eq('video_id', videoId)
+      .eq('user_id', userId);
 
-    if (error) throw error;
+    const saveExists = saves && saves.length > 0;
+
+    if (saveExists) {
+      const { error } = await supabase
+        .from('saves')
+        .delete()
+        .eq('video_id', videoId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('saves')
+        .insert([{ video_id: videoId, user_id: userId }]);
+
+      if (error) throw error;
+    }
+
     return { success: true };
   } catch (error) {
     console.error("Error toggling save:", error);
