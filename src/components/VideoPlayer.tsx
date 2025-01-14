@@ -123,19 +123,23 @@ export function VideoPlayer({
   }, [video.id]);
 
   useEffect(() => {
-    // Subscribe to realtime updates
+    // Subscribe to realtime updates for aggregated stats only
     const channel = supabase
-      .channel("video_updates")
+      .channel("video_stats")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "comments",
-          filter: `video_id=eq.${video.id}`,
+          table: "videos",
+          filter: `id=eq.${video.id}`,
         },
-        async () => {
-          await refreshVideo();
+        (payload: any) => {
+          // Update only the stats that changed
+          if (payload.new) {
+            setLikeCount(payload.new.likes ?? likeCount);
+            setSaveCount(payload.new.saved_count ?? saveCount);
+          }
         }
       )
       .on(
@@ -143,35 +147,13 @@ export function VideoPlayer({
         {
           event: "*",
           schema: "public",
-          table: "likes",
-          filter: `video_id=eq.${video.id}`,
+          table: "profiles",
+          filter: `id=eq.${video.user_id}`,
         },
-        async () => {
-          await refreshVideo();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "follows",
-          filter: `following_id=eq.${video.user_id}`,
-        },
-        async () => {
-          await refreshVideo();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "saves",
-          filter: `video_id=eq.${video.id}`,
-        },
-        async () => {
-          await refreshVideo();
+        (payload: any) => {
+          if (payload.new) {
+            setFollowerCount(payload.new.follower_count ?? followerCount);
+          }
         }
       )
       .subscribe();
@@ -179,17 +161,7 @@ export function VideoPlayer({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [video.id, video.user_id]);
-
-  const refreshVideo = async () => {
-    const updatedVideo = await updateVideoStats(video.id);
-    if (updatedVideo) {
-      setVideo(updatedVideo);
-      setLikeCount(updatedVideo.likes);
-      setFollowerCount(updatedVideo.profiles.follower_count);
-      setSaveCount(updatedVideo.saved_count);
-    }
-  };
+  }, [video.id, video.user_id, likeCount, saveCount, followerCount]);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -199,7 +171,6 @@ export function VideoPlayer({
     if (result.success) {
       setIsLiked(!isLiked);
       setLikeCount((prev) => prev + (isLiked ? -1 : 1));
-      await refreshVideo();
     }
   };
 
@@ -211,7 +182,6 @@ export function VideoPlayer({
     if (result.success) {
       setIsFollowing(!isFollowing);
       setFollowerCount((prev) => prev + (isFollowing ? -1 : 1));
-      await refreshVideo();
     }
   };
 
@@ -222,7 +192,7 @@ export function VideoPlayer({
     const result = await toggleSave(video.id, user.id);
     if (result.success) {
       setIsSaved(!isSaved);
-      await refreshVideo();
+      setSaveCount((prev) => prev + (isSaved ? -1 : 1));
     }
   };
 

@@ -4,8 +4,7 @@ import { supabase } from "../lib/supabase";
 import { VideoNavigation } from "./VideoNavigation";
 import { useAuth } from "../context/AuthContext";
 import { VideoPlayer } from "./VideoPlayer";
-import { Video, DatabaseVideo, Like, Follow, Save } from "../types/video";
-import { fetchSingle, fetchMany } from "../utils/supabase";
+import { Video, DatabaseVideo } from "../types/video";
 
 export function Feed(): JSX.Element {
   const [videos, setVideos] = useState<Video[]>([]);
@@ -13,10 +12,15 @@ export function Feed(): JSX.Element {
   const { user } = useAuth();
   const { videoId } = useParams<{ videoId?: string }>();
 
-  const fetchVideos = useCallback(async (): Promise<void> => {
-    try {
-      const response = await fetchMany<DatabaseVideo>(
-        supabase
+  useEffect(() => {
+    const loadVideos = async (): Promise<void> => {
+      try {
+        if (!user) {
+          setVideos([]);
+          return;
+        }
+
+        let query = supabase
           .from("videos")
           .select(`
             id,
@@ -29,157 +33,65 @@ export function Feed(): JSX.Element {
             saved_count,
             created_at,
             user_id,
-            profiles (
+            profiles!inner (
               username,
               follower_count,
               following_count
             )
           `)
-          .order("created_at", { ascending: false })
-      );
+          .order("created_at", { ascending: false });
 
-      if (!response.error && response.data) {
-        const transformedVideos: Video[] = response.data.map((video) => ({
+        // If videoId is provided, filter for that specific video
+        if (videoId) {
+          query = query.eq("id", videoId);
+        }
+
+        const { data: videos, error: videosError } = await query as any;
+
+        if (videosError) throw videosError;
+        if (!videos || videos.length === 0) return;
+
+        // Get user interactions in parallel
+        const [{ data: likes }, { data: follows }, { data: saves }] = await Promise.all([
+          supabase
+            .from("likes")
+            .select("video_id")
+            .eq('user_id', user.id)
+            .in('video_id', videos.map((v: DatabaseVideo) => v.id)),
+          supabase
+            .from("follows")
+            .select("following_id")
+            .eq('follower_id', user.id)
+            .in('following_id', videos.map((v: DatabaseVideo) => v.user_id)),
+          supabase
+            .from("saves")
+            .select("video_id")
+            .eq('user_id', user.id)
+            .in('video_id', videos.map((v: DatabaseVideo) => v.id))
+        ]);
+
+        // Create maps for quick lookup
+        const likeMap = new Set(likes?.map(l => l.video_id) ?? []);
+        const followMap = new Set(follows?.map(f => f.following_id) ?? []);
+        const saveMap = new Set(saves?.map(s => s.video_id) ?? []);
+
+        const transformedVideos: Video[] = videos.map((video: DatabaseVideo) => ({
           ...video,
-          profiles: video.profiles,
-          is_liked: false,
-          is_following: false,
-          is_saved: false,
+          profiles: {
+            username: video.profiles.username,
+            follower_count: video.profiles.follower_count,
+            following_count: video.profiles.following_count
+          },
+          is_liked: likeMap.has(video.id),
+          is_following: followMap.has(video.user_id),
+          is_saved: saveMap.has(video.id),
         }));
 
-        if (user) {
-          const videosWithInteractions = await Promise.all(
-            transformedVideos.map(async (video) => {
-              const [likeResponse, followResponse, saveResponse] = await Promise.all([
-                fetchSingle<Like>(
-                  supabase
-                    .from("likes")
-                    .select("id")
-                    .eq("video_id", video.id)
-                    .eq("user_id", user.id)
-                    .maybeSingle()
-                ),
-                fetchSingle<Follow>(
-                  supabase
-                    .from("follows")
-                    .select("id")
-                    .eq("following_id", video.user_id)
-                    .eq("follower_id", user.id)
-                    .maybeSingle()
-                ),
-                fetchSingle<Save>(
-                  supabase
-                    .from("saves")
-                    .select("id")
-                    .eq("video_id", video.id)
-                    .eq("user_id", user.id)
-                    .maybeSingle()
-                ),
-              ]);
+        setVideos(transformedVideos);
 
-              return {
-                ...video,
-                is_liked: !!likeResponse.data,
-                is_following: !!followResponse.data,
-                is_saved: !!saveResponse.data,
-              };
-            })
-          );
-
-          setVideos(videosWithInteractions);
-        } else {
-          setVideos(transformedVideos);
-        }
-
-        // If we have a videoId, find its index
+        // If we have a videoId, set the current index to 0
         if (videoId) {
-          const index = transformedVideos.findIndex(v => v.id === videoId);
-          if (index !== -1) {
-            setCurrentIndex(index);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching videos:", error);
-    }
-  }, [user, videoId]);
-
-  useEffect(() => {
-    const loadVideos = async (): Promise<void> => {
-      try {
-        if (videoId) {
-          // Fetch specific video
-          const response = await fetchSingle<DatabaseVideo>(
-            supabase
-              .from("videos")
-              .select(`
-                id,
-                title,
-                description,
-                video_url,
-                views,
-                likes,
-                comment_count,
-                saved_count,
-                created_at,
-                user_id,
-                profiles (
-                  username,
-                  follower_count,
-                  following_count
-                )
-              `)
-              .eq("id", videoId)
-              .maybeSingle()
-          );
-
-          if (response.data) {
-            const video = {
-              ...response.data,
-              profiles: response.data.profiles,
-              is_liked: false,
-              is_following: false,
-              is_saved: false,
-            };
-            
-            if (user) {
-              const [likeResponse, followResponse, saveResponse] = await Promise.all([
-                fetchSingle<Like>(
-                  supabase
-                    .from("likes")
-                    .select("id")
-                    .eq("video_id", video.id)
-                    .eq("user_id", user.id)
-                    .maybeSingle()
-                ),
-                fetchSingle<Follow>(
-                  supabase
-                    .from("follows")
-                    .select("id")
-                    .eq("following_id", video.user_id)
-                    .eq("follower_id", user.id)
-                    .maybeSingle()
-                ),
-                fetchSingle<Save>(
-                  supabase
-                    .from("saves")
-                    .select("id")
-                    .eq("video_id", video.id)
-                    .eq("user_id", user.id)
-                    .maybeSingle()
-                ),
-              ]);
-
-              video.is_liked = !!likeResponse.data;
-              video.is_following = !!followResponse.data;
-              video.is_saved = !!saveResponse.data;
-            }
-            
-            setVideos([video]);
-            setCurrentIndex(0);
-          }
-        } else {
-          await fetchVideos();
+          setCurrentIndex(0);
         }
       } catch (error) {
         console.error("Error loading videos:", error);
@@ -187,7 +99,7 @@ export function Feed(): JSX.Element {
     };
 
     loadVideos();
-  }, [videoId, user, fetchVideos]);
+  }, [videoId, user?.id]); // Only depend on user.id instead of the entire user object
 
   const handlePrevious = () => {
     if (currentIndex > 0) {

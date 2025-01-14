@@ -5,35 +5,13 @@ export async function toggleLike(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data } = await supabase
-      .from("likes")
-      .select("id")
-      .eq("video_id", videoId)
-      .eq("user_id", userId)
-      .maybeSingle();
+    const { error } = await supabase.rpc('toggle_like', {
+      video_id: videoId,
+      user_id: userId
+    });
 
-    if (data) {
-      // Unlike
-      const { error } = await supabase
-        .from("likes")
-        .delete()
-        .eq("video_id", videoId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
-      return { success: true };
-    } else {
-      // Like
-      const { error } = await supabase.from("likes").insert([
-        {
-          video_id: videoId,
-          user_id: userId,
-        },
-      ]);
-
-      if (error) throw error;
-      return { success: true };
-    }
+    if (error) throw error;
+    return { success: true };
   } catch (error) {
     console.error("Error toggling like:", error);
     return { success: false, error: "Failed to toggle like" };
@@ -45,35 +23,13 @@ export async function toggleFollow(
   followerId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data } = await supabase
-      .from("follows")
-      .select("id")
-      .eq("following_id", followingId)
-      .eq("follower_id", followerId)
-      .maybeSingle();
+    const { error } = await supabase.rpc('toggle_follow', {
+      following_id: followingId,
+      follower_id: followerId
+    });
 
-    if (data) {
-      // Unfollow
-      const { error } = await supabase
-        .from("follows")
-        .delete()
-        .eq("following_id", followingId)
-        .eq("follower_id", followerId);
-
-      if (error) throw error;
-      return { success: true };
-    } else {
-      // Follow
-      const { error } = await supabase.from("follows").insert([
-        {
-          following_id: followingId,
-          follower_id: followerId,
-        },
-      ]);
-
-      if (error) throw error;
-      return { success: true };
-    }
+    if (error) throw error;
+    return { success: true };
   } catch (error) {
     console.error("Error toggling follow:", error);
     return { success: false, error: "Failed to toggle follow" };
@@ -85,35 +41,13 @@ export async function toggleSave(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data } = await supabase
-      .from("saves")
-      .select("id")
-      .eq("video_id", videoId)
-      .eq("user_id", userId)
-      .maybeSingle();
+    const { error } = await supabase.rpc('toggle_save', {
+      video_id: videoId,
+      user_id: userId
+    });
 
-    if (data) {
-      // Unsave
-      const { error } = await supabase
-        .from("saves")
-        .delete()
-        .eq("video_id", videoId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
-      return { success: true };
-    } else {
-      // Save
-      const { error } = await supabase.from("saves").insert([
-        {
-          video_id: videoId,
-          user_id: userId,
-        },
-      ]);
-
-      if (error) throw error;
-      return { success: true };
-    }
+    if (error) throw error;
+    return { success: true };
   } catch (error) {
     console.error("Error toggling save:", error);
     return { success: false, error: "Failed to toggle save" };
